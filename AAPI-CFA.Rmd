@@ -1,0 +1,337 @@
+---
+title: "AAPI-CFA"
+author: "Jaffa Romain"
+date: "2023-09-11"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lavaan);library(papaja);library(lavaan);library(broom);library(dplyr);library(ggplot2);library(introdataviz);library(dmacs);library(cowplot);library(tidyverse);library(semTools);library("corrplot");library(semPlot)
+
+
+lead <- read.csv("leadershipfull.csv")%>%filter(eth1==6|eth1==5)  %>% mutate(Ethnicity = 
+ case_when(eth1==6~ "East Asian",
+           eth1==5~"South Asian"))  %>% distinct(n1, .keep_all = TRUE)  # keep only distinct names - removes multiple entries
+lead$Q25_1_mean <- rowMeans(subset(lead, select = c(`Q25_rater_1_1`, 
+                  `Q25_rater_2_1`, `Q25_rater_3_1`, `Q25_rater_4_1`,
+                  `Q25_rater_5_1`)), na.rm = TRUE)
+lead$Q25_1_meanr=6-lead$Q25_1_mean
+# Question 2
+lead$Q25_2_mean <- rowMeans(subset(lead, select = c(`Q25_rater_1_2`, 
+                  `Q25_rater_2_2`, `Q25_rater_3_2`, `Q25_rater_4_2`,
+                  `Q25_rater_5_2`)), na.rm = TRUE)
+# Question 3
+lead$Q25_3_mean <- rowMeans(subset(lead, select = c(`Q25_rater_1_3`, 
+                     `Q25_rater_1_3`, `Q25_rater_1_3`, `Q25_rater_1_3`, 
+                     `Q25_rater_1_3`)), na.rm = TRUE)
+lead$Q25_3_meanr=6-lead$Q25_3_mean
+
+# Question 4
+lead$Q25_4_mean <- rowMeans(subset(lead, select = c(`Q25_rater_1_4`,
+                  `Q25_rater_1_4`, `Q25_rater_1_4`, `Q25_rater_1_4`, 
+                `Q25_rater_1_4`)), na.rm = TRUE)
+
+# Question 5
+lead$Q25_5_mean <- rowMeans(subset(lead,select = c(`Q25_rater_1_5`, 
+                  `Q25_rater_1_5`, `Q25_rater_1_5`, `Q25_rater_1_5`, 
+                  `Q25_rater_1_5`)), na.rm = TRUE)
+lead$Q25_5_meanr=6-lead$Q25_5_mean
+
+# Question 6
+lead$Q25_6_mean <- rowMeans(subset(lead,select = c(`Q25_rater_1_6`, 
+      `Q25_rater_1_6`, `Q25_rater_1_6`, `Q25_rater_1_6`,
+      `Q25_rater_1_6`)), na.rm = TRUE) 
+# Question 7
+lead$Q25_7_mean <- rowMeans(subset(lead,select = c(`Q25_rater_1_7`, 
+        `Q25_rater_1_7`, `Q25_rater_1_7`, `Q25_rater_1_7`,
+        `Q25_rater_1_7`)), na.rm = TRUE)
+lead$Q25_7_meanr=6-lead$Q25_7_mean
+
+# Question 8
+lead$Q25_8_mean <- rowMeans(subset(lead,select = c(`Q25_rater_1_8`, 
+              `Q25_rater_1_8`, `Q25_rater_1_8`,
+              `Q25_rater_1_8`, `Q25_rater_1_8`)), na.rm = TRUE)
+# Question 9
+lead$Q25_9_mean <- rowMeans(subset(lead,select = c(`Q25_rater_1_9`, 
+    `Q25_rater_1_9`, `Q25_rater_1_9`, `Q25_rater_1_9`,
+    `Q25_rater_1_9`)), na.rm = TRUE)
+lead$Q25_9_meanr=6-lead$Q25_9_mean
+
+# Question 10
+lead$Q25_10_mean <- rowMeans(subset(lead,select = c(`Q25_rater_1_10`, 
+        `Q25_rater_1_10`, `Q25_rater_1_10`, `Q25_rater_1_10`,
+        `Q25_rater_1_10`)), na.rm = TRUE)
+lead <- lead %>% 
+  mutate(team = 1:length(lead$id1))
+
+# Questions to be recoded 
+# 16, 19, 20
+# team member 1 
+lead$Q24_rater_1_16r = dplyr::recode(lead$Q24_rater_1_16, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_1_19r = dplyr::recode(lead$Q24_rater_1_19, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_1_20r = dplyr::recode(lead$Q24_rater_1_20, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+
+lead$Q24_rater_2_16r = dplyr::recode(lead$Q24_rater_2_16, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_2_19r = dplyr::recode(lead$Q24_rater_2_19, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_2_20r = dplyr::recode(lead$Q24_rater_2_20, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+
+lead$Q24_rater_3_16r = dplyr::recode(lead$Q24_rater_3_16, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_3_19r = dplyr::recode(lead$Q24_rater_3_19, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_3_20r = dplyr::recode(lead$Q24_rater_3_20, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+
+lead$Q24_rater_4_16r = dplyr::recode(lead$Q24_rater_4_16, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_4_19r = dplyr::recode(lead$Q24_rater_4_19, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_4_20r = dplyr::recode(lead$Q24_rater_4_20, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+
+lead$Q24_rater_5_16r = dplyr::recode(lead$Q24_rater_5_16, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_5_19r = dplyr::recode(lead$Q24_rater_5_19, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+lead$Q24_rater_5_20r = dplyr::recode(lead$Q24_rater_5_20, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+
+lead$Q24_1_mean_r=dplyr::recode(lead$Q25_1_mean, `1`=5, `2`=4, `3`=3, `4`=2, `5`=1)
+
+lead$Q24_1_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_1, Q24_rater_2_1, 
+Q24_rater_3_1, Q24_rater_4_1, Q24_rater_5_1)), na.rm = TRUE)
+lead$Q24_2_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_2, Q24_rater_2_2,
+  Q24_rater_3_2, Q24_rater_4_2, Q24_rater_5_2)), na.rm = TRUE)
+lead$Q24_3_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_3, Q24_rater_2_3,
+Q24_rater_3_3, Q24_rater_4_3, Q24_rater_5_3)), na.rm = TRUE)
+lead$Q24_4_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_4, Q24_rater_2_4, 
+Q24_rater_3_4, Q24_rater_4_4, Q24_rater_5_4)), na.rm = TRUE)
+lead$Q24_5_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_5, Q24_rater_2_5,
+Q24_rater_3_5, Q24_rater_4_5, Q24_rater_5_5)), na.rm = TRUE)
+lead$Q24_6_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_6, Q24_rater_2_6,
+Q24_rater_3_6, Q24_rater_4_6, Q24_rater_5_6)), na.rm = TRUE)
+lead$Q24_7_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_7, Q24_rater_2_7,
+Q24_rater_3_7, Q24_rater_4_7, Q24_rater_5_7)), na.rm = TRUE)
+lead$Q24_8_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_8, Q24_rater_2_8,
+Q24_rater_3_8, Q24_rater_4_8, Q24_rater_5_8)), na.rm = TRUE)
+lead$Q24_9_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_9, Q24_rater_2_9,
+Q24_rater_3_9, Q24_rater_4_9, Q24_rater_5_9)), na.rm = TRUE)
+lead$Q24_10_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_10, Q24_rater_2_10, 
+Q24_rater_3_10, Q24_rater_4_10, Q24_rater_5_10)), na.rm = TRUE)
+
+lead$Q24_11_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_11, Q24_rater_2_11, 
+Q24_rater_3_11, Q24_rater_4_11, Q24_rater_5_11)), na.rm = TRUE)
+lead$Q24_12_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_12, Q24_rater_2_12,
+Q24_rater_3_12, Q24_rater_4_12, Q24_rater_5_12)), na.rm = TRUE)
+lead$Q24_13_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_13, Q24_rater_2_13, 
+Q24_rater_3_13, Q24_rater_4_13, Q24_rater_5_13)), na.rm = TRUE)
+lead$Q24_14_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_14, Q24_rater_2_14, 
+Q24_rater_3_14, Q24_rater_4_14, Q24_rater_5_14)), na.rm = TRUE)
+lead$Q24_15_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_15, Q24_rater_2_15,
+Q24_rater_3_15, Q24_rater_4_15, Q24_rater_5_15)), na.rm = TRUE)
+lead$Q24_16r_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_16r, 
+Q24_rater_2_16r, Q24_rater_3_16r, Q24_rater_4_16r, Q24_rater_5_16r)), na.rm = TRUE)
+lead$Q24_17_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_17, Q24_rater_2_17,
+Q24_rater_3_17, Q24_rater_4_17, Q24_rater_5_17)), na.rm = TRUE)
+lead$Q24_18_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_8, Q24_rater_2_18,
+Q24_rater_3_18, Q24_rater_4_18, Q24_rater_5_18)), na.rm = TRUE)
+lead$Q24_19r_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_19r, Q24_rater_2_19r,
+Q24_rater_3_19r, Q24_rater_4_19r, Q24_rater_5_19r)), na.rm = TRUE)
+lead$Q24_20r_mean <- rowMeans(subset(lead,select = c(Q24_rater_1_20r, 
+Q24_rater_2_20r, Q24_rater_3_20r, Q24_rater_4_20r, Q24_rater_5_20r)), na.rm = TRUE)
+
+# getting average scores for LBDQ scores (initiating structure and consideration)
+lead$initiating_structure <- rowMeans(subset(lead,select = c(Q24_1_mean, Q24_2_mean, 
+Q24_3_mean, Q24_4_mean, Q24_5_mean, Q24_6_mean, Q24_7_mean, Q24_8_mean, 
+Q24_9_mean, Q24_10_mean), na.rm=T))
+
+
+lead$consideration <- rowMeans(subset(lead,select = c(Q24_11_mean, Q24_12_mean, 
+Q24_13_mean, Q24_14_mean, Q24_15_mean, Q24_16r_mean, Q24_17_mean, Q24_18_mean,
+Q24_19r_mean, Q24_20r_mean), na.rm=T))
+lead=lead %>% mutate(group=case_when(
+  Ethnicity=="East Asian"&gender1==1~"East Asian Male",
+  Ethnicity=="East Asian"&gender1==2~"East Asian Female",
+  Ethnicity=="South Asian"&gender1==1~"South Asian Male",
+  Ethnicity=="South Asian" &gender1==2~"South Asian Female"
+                                     )) %>% filter(!is.na(group))
+
+data_long <-lead %>%
+  pivot_longer(cols = starts_with(c("Q24_rater","Q25_rater")), names_to = "variable", values_to = "rating") %>%
+  separate(variable, into = c("survey", ".", "rater","question_number"), 
+           sep = "_", remove = TRUE)
+data_long=data_long %>% dplyr::select(-starts_with(c("Q24","Q25","Q40","member","Q30","Q4")))
+
+
+subdata=function(data,s,question){
+  data=data %>% filter(survey==s,question_number==question) %>% dplyr::select(c(n1,id1,Ethnicity,gender1,rater,team,group,rating))
+return(data)
+}
+
+q25_1=subdata(data_long,s="Q25",question=1)
+
+dt=q25_1 %>% dplyr::select(n1,id1,Ethnicity,gender1,rater,team,group)
+for (i in 1:10){
+  s=subdata(data=data_long,s="Q25",q=i) %>% dplyr::select(rating)
+  colnames(s)=c(paste0("Q_",i))
+    print(names(s))
+
+  dt=dt %>% cbind(s)
+}
+
+dt$Q_1r=6-dt$Q_1
+dt$Q_3r=6-dt$Q_3
+dt$Q_5r=6-dt$Q_5
+dt$Q_7r=6-dt$Q_7
+dt$Q_9r=6-dt$Q_9
+
+```
+
+# Personality
+```{r}
+cormat <-lead %>%
+  dplyr::select(c(Q25_1_meanr, Q25_6_mean,Q25_2_mean,Q25_7_meanr,
+            Q25_8_mean, Q25_3_meanr, Q25_10_mean ,Q25_5_meanr, Q25_4_mean, Q25_9_meanr))  %>%cor(use="complete.obs")
+
+corrplot(cormat, order = "hclust", addrect = 2)
+
+library(corrr)
+corm <-lead %>%
+  dplyr::select(c(Q25_1_meanr, Q25_6_mean,Q25_2_mean,Q25_7_meanr,
+            Q25_8_mean, Q25_3_meanr, Q25_10_mean ,Q25_5_meanr, Q25_4_mean, Q25_9_meanr))  %>%correlate()
+
+corm  %>% 
+  rearrange()  %>% 
+  rplot(colors = c("red", "white", "blue"))
+```
+
+```{r}
+KMO(cor_mat)
+
+P.model <- 'extraversion  =~ Q25_1_meanr + Q25_6_mean
+            agreeableness  =~ Q25_2_mean + Q25_7_meanr
+            conscientiousness  =~ Q25_8_mean + Q25_3_meanr
+            openness  =~ Q25_10_mean + Q25_5_meanr
+            neuroticism  =~ Q25_4_mean + Q25_9_meanr'
+
+
+EA=lead %>% filter(Ethnicity=="East Asian")
+SA=lead %>% filter(Ethnicity=="South Asian")
+
+
+cfa.EA=cfa(P.model,
+           data = EA, estimator="MLR")
+cfa.SA=cfa(P.model,
+           data = SA, estimator="MLR")
+summary(cfa.EA )
+semPlot::semPaths(cfa.SA, "std", nCharNodes=5,nCharEdges=5,sizeMan = 5,
+           edge.label.cex = 0.8,posCol=c("black", "black"),style = "ram" )
+
+summary(cfa.SA ,fit.measures = TRUE, standardized = TRUE)
+
+cfa.config<- cfa(P.model,
+           data = lead, estimator="MLR", 
+           group = "Ethnicity")
+
+summary(cfa.config, fit.measures = TRUE, standardized = TRUE)
+
+semPlot::semPaths(cfa.config, "std", nCharNodes=5,nCharEdges=5,sizeMan = 5,
+           edge.label.cex = 0.8,posCol=c("black", "black"),style = "ram")
+
+cfa.metric <- cfa(P.model,
+           data = lead, estimator="MLR", 
+           group = "Ethnicity",
+                  group.equal = "loadings")
+
+# Model comparison
+# compareFit(cfa.config, cfa.metric)
+# 
+# cfa.scalar <- cfa(P.model,
+#            data = lead, estimator="MLR", 
+#            group = "Ethnicity",
+#                   group.equal = c("loadings","intercepts"))
+# 
+# # Model comparison
+# compareFit(cfa.metric, cfa.scalar)
+
+```
+# Leadership
+```{r}
+cormat <-lead %>%
+  dplyr::select(c(Q24_1_mean,Q24_2_mean,Q24_3_mean,Q24_4_mean,Q24_5_mean,Q24_6_mean,Q24_7_mean,Q24_8_mean,Q24_9_mean,Q24_10_mean,Q24_11_mean,Q24_12_mean,Q24_13_mean,Q24_14_mean,Q24_15_mean,Q24_16r_mean,Q24_17_mean,Q24_18_mean,Q24_19r_mean,Q24_20r_mean))  %>%cor(use="complete.obs")
+
+corrplot(cormat, order = "hclust", addrect = 4)
+dat=lead %>%
+  dplyr::select(c(Q24_1_mean,Q24_2_mean,Q24_3_mean,Q24_4_mean,Q24_5_mean,Q24_6_mean,Q24_7_mean,Q24_8_mean,Q24_9_mean,Q24_10_mean,Q24_11_mean,Q24_12_mean,Q24_13_mean,Q24_14_mean,Q24_15_mean,Q24_16r_mean,Q24_17_mean,Q24_18_mean,Q24_19r_mean,Q24_20r_mean)) %>% drop_na()
+library(psych)
+KMO(dat)
+cortest.bartlett(cormat,n=836)
+
+ev <- eigen(cor(dat)) # get eigenvalues
+cumsum(ev$values)/20
+ev$values
+scree(dat, pc=FALSE)  # Use pc=FALSE for factor analysis
+fa.parallel(dat, fa="fa")
+
+Nfacs <- 3  # This is for four factors. You can change this as needed.
+
+fit <- fa(dat, Nfacs, rotate="varimax",fm = "ml")
+
+
+print(fit, digits=3, cutoff=0.3, sort=TRUE)
+loads <- fit$loadings
+
+fa.diagram(loads)
+```
+
+
+```{r}
+
+L.model <- 'task leadership =~ Q24_1_mean+Q24_2_mean+Q24_3_mean+Q24_4_mean+Q24_5_mean+Q24_6_mean+Q24_7_mean+Q24_8_mean+Q24_10_mean
+interpersonal leadership =~ Q24_11_mean+Q24_12_mean+Q24_13_mean+Q24_14_mean+Q24_15_mean+Q24_16r_mean+Q24_17_mean+Q24_18_mean+Q24_19r_mean+Q24_20r_mean'
+
+L2.model <- 'f1 =~ Q24_1_mean+Q24_2_mean+Q24_3_mean+Q24_4_mean+Q24_5_mean+Q24_6_mean+Q24_7_mean+Q24_8_mean+Q24_9_mean+Q24_10_mean
+f2 =~ Q24_11_mean+Q24_13_mean+Q24_14_mean+Q24_15_mean+Q24_17_mean+Q24_18_mean
+f3 =~ Q24_16r_mean+Q24_19r_mean+Q24_20r_mean'
+
+cfa.EA=cfa(L2.model,
+           data = EA, estimator="MLR")
+cfa.SA=cfa(L2.model,
+           data = SA, estimator="WLSMV")
+summary(cfa.EA, fit.measures = TRUE, standardized = TRUE)
+summary(cfa.SA, fit.measures = TRUE, standardized = TRUE)
+
+summary(cfa(L2.model,
+           data = lead, estimator="MLM" 
+           ), fit.measures = TRUE, standardized = TRUE)
+car::vif(dat)
+cfa.config<- cfa(L.model,
+           data = lead, estimator="MLR", 
+           group = "Ethnicity")
+
+summary(cfa.config, fit.measures = TRUE, standardized = TRUE)
+
+cfa.metric <- cfa(L.model,
+           data = lead, estimator="MLR", 
+           group = "Ethnicity",
+                  group.equal = "loadings")
+summary( cfa.metric)
+# Model comparison
+summary(compareFit(cfa.config, cfa.metric))
+
+cfa.scalar <- cfa(L.model,
+           data = lead, estimator="MLR", 
+           group = "Ethnicity",
+                  group.equal = c("loadings","intercepts"))
+
+
+# Model comparison
+summary(compareFit(cfa.metric, cfa.scalar))
+
+summary( cfa.scalar)
+
+L2.model <- 'leadership =~ Q24_1_mean+Q24_2_mean+Q24_3_mean+Q24_4_mean+Q24_5_mean+Q24_6_mean+Q24_7_mean+Q24_8_mean+Q24_9_mean+Q24_10_mean+Q24_11_mean+Q24_12_mean+Q24_13_mean+Q24_14_mean+Q24_15_mean+Q24_16r_mean+Q24_17_mean+Q24_18_mean+Q24_19r_mean+Q24_20r_mean'
+
+cfa.config<- cfa(L2.model,
+           data = lead, estimator="MLR", 
+           group = "Ethnicity")
+summary(cfa.config)
+
+```
+
+
+

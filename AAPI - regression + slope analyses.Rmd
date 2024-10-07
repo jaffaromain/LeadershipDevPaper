@@ -1,0 +1,501 @@
+---
+title: "AAPI  analysis - part 2 of analysis"
+author: "Jaffa Romain"
+date: '2022-07-20'
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse); library(dplyr);library(readr);library(psych);library(tidyr);library(janitor);library(kableExtra);library(rstatix);library(ggthemr)
+# theme for plots
+#flat, flat dark, dust, light, earth, fresh, chalk, lilac, carrot, pale, copper, grape, greyscale, sky, solarized, grass, sea, camouflage.
+library(tidyverse); library(broom);library(dtplyr);library(lme4);library(lmerTest);library(cowplot);library(psych);library(car);library(ppcor);library(ggpubr);library(ggplot2) ;library(sjstats);library(hausekeep);library(purrr);library(tidyr);library(lavaan);library(haven);library(performance); library(apaTables)
+```
+
+```{r data setup, message=FALSE, warning=FALSE, include=FALSE}
+questionnaires <- readRDS(here::here("questionnaires.rds"))
+lead_longest <- readRDS(here::here("lead_longest.rds"))
+lead <- readRDS(here::here("lead.rds"))
+lead_long <- readRDS(here::here("lead_long.rds"))
+lead_longest <- lead_longest %>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black"))
+teams  <- read_csv("teamsplus copy 2.csv")
+teams$team <- teams$...7
+teams <- teams %>% dplyr::select(-...7)
+teams_long <- teams %>%  pivot_longer(-team, names_to = "name", values_to = "team", names_repair = "unique")
+teams_long$Team <- teams_long$team...1
+teams_long$Name <- teams_long$team...3
+teams_long$id <- teams_long$name
+teams_long <- teams_long %>% dplyr::select(-c(team...1, team...3,name))
+final_teams <- teams_long %>% distinct(Name, .keep_all = TRUE)
+tst <- final_teams %>% group_by(Team) %>% count()
+lead_longest$Name <- tolower(lead_longest$Name)
+lead_longest <- lead_longest %>% left_join(final_teams, by = "Name")
+## setting colours
+
+BLACK = "#383669"
+EA = "#783B36"
+WHITE =  "#CBB0A9"
+SA = "#888B7A"
+colours = c(BLACK, EA, WHITE, SA)
+```
+
+
+# Leadership Scores Data 
+```{r}
+
+initiating_structure <- lead_longest %>% filter((Survey == "Q24" &(Question == "1"| Question == "2"|Question == "3"|Question == "4"|Question == "5"|Question == "6"|Question == "7"|Question == "8"|Question == "9"|Question == "10"))) %>% group_by(Name, Rater, Survey) %>% mutate(initiation_score = mean(Score)) %>% ungroup()
+
+consideration <- lead_longest %>% filter(Survey == "Q24" & (Question == "11"| Question == "12"|Question == "13"|Question == "14"|Question == "15"|Question == "16r"|Question == "17"|Question == "18"|Question == "19r"|Question == "20r")) %>% group_by(Name, Rater, Survey) %>% mutate(consideration_score = mean(Score))
+
+# lead_longest %>% mutate(Question = as.numeric(Question)) %>% filter(Survey == "Q25" ) %>% group_by(Survey, Question, Gender) %>% get_summary_stats(Score, type = "mean_sd") %>% kable(caption = "Personality Scores by Gender") %>% kable_styling(latex_options = "striped") %>%
+#   save_kable("BFIscorestable.png")
+# 
+# lead_longest %>% mutate(Question = as.numeric(Question)) %>% filter(Survey == "Q25" ) %>% group_by(Survey, Question, Ethnicity) %>% get_summary_stats(Score, type = "mean_sd") %>% kable(caption = "Personality Scores by Gender") %>% kable_styling(latex_options = "striped") %>%
+#   save_kable("BFIscorestable.png")
+```
+
+# Regression Set Up 
+```{r}
+library(sjPlot)
+library(sjstats)
+library(MuMIn)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(lme4)
+library(apaTables)
+initiating_structure <- initiating_structure %>% mutate(Ethnicity = as.factor(Ethnicity)) %>% mutate(Ethnicity = fct_relevel(Ethnicity, "East Asian" , after = 0))
+
+consideration <- consideration %>% mutate(Ethnicity = as.factor(Ethnicity)) %>% mutate(Ethnicity = fct_relevel(Ethnicity, "East Asian"   , after = 0))
+
+consideration$Reserved = consideration$Q25_1_mean
+consideration$Trusting = consideration$Q25_2_mean
+consideration$Lazy = consideration$Q25_3_mean
+consideration$Relaxed = consideration$Q25_4_mean
+consideration$`Few artistic interests` = consideration$Q25_5_mean
+consideration$Outgoing = consideration$Q25_6_mean
+consideration$`Finds faults` = consideration$Q25_7_mean
+consideration$Thorough = consideration$Q25_8_mean
+consideration$Nervous = consideration$Q25_9_mean
+consideration$`Active Imagination` = consideration$Q25_10_mean
+
+initiating_structure$Reserved = initiating_structure$Q25_1_mean
+initiating_structure$Trusting = initiating_structure$Q25_2_mean
+initiating_structure$Lazy = initiating_structure$Q25_3_mean
+initiating_structure$Relaxed = initiating_structure$Q25_4_mean
+initiating_structure$`Few artistic interests` = initiating_structure$Q25_5_mean
+initiating_structure$Outgoing = initiating_structure$Q25_6_mean
+initiating_structure$`Finds faults` = initiating_structure$Q25_7_mean
+initiating_structure$Thorough = initiating_structure$Q25_8_mean
+initiating_structure$Nervous = initiating_structure$Q25_9_mean
+initiating_structure$`Active Imagination` = initiating_structure$Q25_10_mean
+
+
+# mean center continuous predictor variables
+consideration$Reserved = consideration$Reserved  - mean(consideration$Reserved, na.rm=TRUE)
+
+consideration$Trusting = consideration$Trusting  - mean(consideration$Trusting, na.rm=TRUE)
+
+consideration$Lazy = consideration$Lazy  - mean(consideration$Lazy, na.rm=TRUE)
+
+consideration$Relaxed = consideration$Relaxed - mean(consideration$Relaxed, na.rm=TRUE)
+
+consideration$`Few artistic interests` = consideration$`Few artistic interests`  - mean(consideration$`Few artistic interests`, na.rm=TRUE)
+
+consideration$Outgoing = consideration$Outgoing  - mean(consideration$Outgoing, na.rm=TRUE)
+
+consideration$`Finds faults` = consideration$`Finds faults` - mean(consideration$`Finds faults`, na.rm=TRUE)
+
+consideration$Thorough = consideration$Thorough  - mean(consideration$Thorough, na.rm=TRUE)
+
+consideration$Nervous = consideration$Nervous  - mean(consideration$Nervous, na.rm=TRUE)
+
+consideration$`Active Imagination` = consideration$`Active Imagination`  - mean(consideration$`Active Imagination`, na.rm=TRUE)
+
+
+
+
+# mean center continuous predictor variables
+initiating_structure$Reserved = initiating_structure$Reserved  - mean(initiating_structure$Reserved, na.rm=TRUE)
+
+initiating_structure$Trusting = initiating_structure$Trusting  - mean(initiating_structure$Trusting, na.rm=TRUE)
+
+initiating_structure$Lazy = initiating_structure$Lazy  - mean(initiating_structure$Lazy, na.rm=TRUE)
+
+initiating_structure$Relaxed = initiating_structure$Relaxed - mean(initiating_structure$Relaxed, na.rm=TRUE)
+
+initiating_structure$`Few artistic interests` = initiating_structure$`Few artistic interests`  - mean(initiating_structure$`Few artistic interests`, na.rm=TRUE)
+
+initiating_structure$Outgoing = initiating_structure$Outgoing  - mean(initiating_structure$Outgoing, na.rm=TRUE)
+
+initiating_structure$`Finds faults` = initiating_structure$`Finds faults` - mean(initiating_structure$`Finds faults`, na.rm=TRUE)
+
+initiating_structure$Thorough = initiating_structure$Thorough  - mean(initiating_structure$Thorough, na.rm=TRUE)
+
+initiating_structure$Nervous = initiating_structure$Nervous  - mean(initiating_structure$Nervous, na.rm=TRUE)
+
+initiating_structure$`Active Imagination` = initiating_structure$`Active Imagination`  - mean(initiating_structure$`Active Imagination`, na.rm=TRUE)
+
+
+```
+
+# Regression - Gender Models
+## Model 1: Gender x   Interpersonal Leadership
+```{r}
+
+gen_mod_1_step1 <- lmer(log(consideration_score) ~  Gender +  (1|team), data = consideration)
+
+summary(gen_mod_1_step1)
+tab_model(gen_mod_1_step1)
+round(r.squaredGLMM(gen_mod_1_step1), 3)
+
+# step 2 - add personality covariates
+gen_mod_1_step2 <- lmer(log(consideration_score) ~  Gender + Thorough + Lazy + Relaxed + Nervous + (1|team), data = consideration)
+
+summary(gen_mod_1_step2)
+tab_model(gen_mod_1_step2)
+round(r.squaredGLMM(gen_mod_1_step2), 3)
+anova(gen_mod_1_step1, gen_mod_1_step2)
+
+# # step 3 - add extraversion
+# gen_mod_1_step3 <- lmer(consideration_score ~  Gender + Thorough + Lazy + Relaxed + Nervous +  (1|team), data = consideration)
+# 
+# summary(gen_mod_1_step3)
+# tab_model(gen_mod_1_step3)
+# round(r.squaredGLMM(gen_mod_1_step3), 3)
+# anova(gen_mod_1_step2, gen_mod_1_step3)
+
+# last step 
+gen_mod_1_step4 <- lmer(log(consideration_score) ~ Thorough*Gender + Lazy*Gender + 
+                                    Relaxed*Gender + Nervous*Gender  
+                                    +  (1|team), data = consideration)
+
+summary(gen_mod_1_step4)
+tab_model(gen_mod_1_step4)
+round(r.squaredGLMM(gen_mod_1_step4), 3)
+anova(gen_mod_1_step2, gen_mod_1_step4)
+
+library(jtools)
+library(interactions)
+
+# Thorough
+gen_Thorough_con_fit <- lmer(consideration_score~Q25_8_mean*Gender +  (1|team), data = consideration)
+
+
+summ(gen_Thorough_con_fit)
+
+sim_slopes(gen_Thorough_con_fit, pred = Q25_8_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_Thorough_con_fit,pred = Q25_8_mean, modx =  Gender, x.label = "Does a Thorough Job", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+# Lazy
+gen_lazy_con_fit <- lmer(consideration_score~Q25_3_mean*Gender +  (1|team), data = consideration)
+
+
+summ(gen_lazy_con_fit)
+
+sim_slopes(gen_lazy_con_fit, pred = Q25_3_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_lazy_con_fit,pred = Q25_3_mean, modx =  Gender, x.label = "Tends to be Lazy", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+# Relaxed
+gen_relaxed_con_fit <- lmer(consideration_score~Q25_4_mean*Gender +  (1|team), data = consideration)
+
+
+summ(gen_relaxed_con_fit)
+
+sim_slopes(gen_relaxed_con_fit, pred = Q25_4_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_relaxed_con_fit,pred = Q25_4_mean, modx =  Gender, x.label = "Relaxed, Handles Stress Well", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+# Gets Nervous Easily
+gen_nervous_con_fit <- lmer(consideration_score~Q25_9_mean*Gender +  (1|team), data = consideration)
+
+
+summ(gen_nervous_con_fit)
+
+sim_slopes(gen_nervous_con_fit, pred = Q25_9_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_nervous_con_fit,pred = Q25_9_mean, modx =  Gender, x.label = "Gets Nervous easily", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+
+```
+
+## Model 2: Gender x Task Leadership
+```{r}
+gen_mod_2_step1 <- lmer(initiation_score ~  Gender +  (1|team), data = initiating_structure)
+
+summary(gen_mod_2_step1)
+tab_model(gen_mod_2_step1)
+round(r.squaredGLMM(gen_mod_2_step1), 3)
+
+# step 2 - add personality covariates
+gen_mod_2_step2 <- lmer(initiation_score ~  Gender + Thorough + Lazy + Relaxed + Nervous + (1|team), data = initiating_structure)
+
+summary(gen_mod_2_step2)
+tab_model(gen_mod_2_step2)
+round(r.squaredGLMM(gen_mod_2_step2), 3)
+anova(gen_mod_2_step1, gen_mod_2_step2)
+
+# # step 3 - add extraversion
+# gen_mod_2_step3 <- lmer(consideration_score ~  Gender + Thorough + Lazy + Relaxed + Nervous  (1|team), data = consideration)
+# 
+# summary(gen_mod_1_step3)
+# tab_model(gen_mod_1_step3)
+# round(r.squaredGLMM(gen_mod_1_step3), 3)
+# anova(gen_mod_1_step2, gen_mod_1_step3)
+
+# last step 
+gen_mod_2_step4 <- lmer(initiation_score ~Thorough*Gender + Lazy*Gender + 
+                                    Relaxed*Gender + Nervous*Gender +  (1|team), data = initiating_structure)
+
+summary(gen_mod_2_step4)
+tab_model(gen_mod_2_step4)
+round(r.squaredGLMM(gen_mod_2_step4), 3)
+anova(gen_mod_2_step2, gen_mod_2_step4)
+
+##############
+# Simple Slopes
+# Thorough
+gen_Thorough_task_fit <- lmer(initiation_score~Q25_8_mean*Gender +  (1|team), data = initiating_structure)
+
+
+summ(gen_Thorough_task_fit)
+
+sim_slopes(gen_Thorough_task_fit, pred = Q25_8_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_Thorough_task_fit,pred = Q25_8_mean, modx =  Gender, x.label = "Does a Thorough Job", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+# Lazy
+gen_lazy_task_fit <- lmer(initiation_score~Q25_3_mean*Gender +  (1|team), data = initiating_structure)
+
+
+summ(gen_lazy_task_fit)
+
+sim_slopes(gen_lazy_task_fit, pred = Q25_3_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_lazy_task_fit,pred = Q25_3_mean, modx =  Gender, x.label = "Tends to be Lazy", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+
+# Relaxed
+gen_relaxed_task_fit <- lmer(initiation_score~Q25_4_mean*Gender +  (1|team), data = initiating_structure)
+
+
+summ(gen_relaxed_task_fit)
+
+sim_slopes(gen_relaxed_task_fit, pred = Q25_4_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_relaxed_task_fit,pred = Q25_4_mean, modx =  Gender, x.label = "Relaxed, Handles Stress Well", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+
+# Gets Nervous Easily
+gen_nervous_task_fit <- lmer(initiation_score~Q25_9_mean*Gender +  (1|team), data = initiating_structure)
+
+
+summ(gen_nervous_task_fit)
+
+sim_slopes(gen_nervous_task_fit, pred = Q25_9_mean, modx = Gender, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(gen_nervous_task_fit,pred = Q25_9_mean, modx =  Gender, x.label = "Gets Nervous easily", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+```
+
+
+
+
+
+# Regression - Ethnicity Models
+## Model 1: Ethnicity x  Interpersonal Leadership
+```{r}
+
+eth_mod_1_step1 <- lmer(consideration_score ~  Ethnicity +  (1|team), data = consideration)
+
+summary(eth_mod_1_step1)
+tab_model(eth_mod_1_step1)
+round(r.squaredGLMM(eth_mod_1_step1), 3)
+Anova(eth_mod_1_step1, type=3)
+
+# step 2 - add personality covariates
+eth_mod_1_step2 <- lmer(consideration_score ~  Ethnicity + Thorough + Lazy + Reserved + Outgoing  + `Finds faults` + Trusting + Nervous + Relaxed + `Active Imagination`+ `Few artistic interests` + (1|team), data = consideration)
+
+summary(eth_mod_1_step2)
+tab_model(eth_mod_1_step2)
+round(r.squaredGLMM(eth_mod_1_step2), 3)
+anova(eth_mod_1_step1, eth_mod_1_step2)
+
+# step 3 - interaction for conscientiousness
+
+eth_mod_1_step3 <- lmer(consideration_score ~  Ethnicity*Thorough + Ethnicity*Lazy + Ethnicity*Reserved + Ethnicity*Outgoing  + Ethnicity*`Finds faults` + Ethnicity*Trusting +   (1|team), data = consideration)
+
+summary(eth_mod_1_step3)
+# tab_model(eth_mod_1_step3)
+# round(r.squaredGLMM(eth_mod_1_step3), 3)
+# anova(eth_mod_1_step2, eth_mod_1_step3)
+
+eth_mod_1_step4 <- lmer(consideration_score ~  Ethnicity +  Thorough + Lazy + Reserved + Outgoing  + `Finds faults` + Trusting + Ethnicity*Thorough + Ethnicity*Lazy +  (1|team), data = consideration)
+
+eth_mod_1_step5 <- lmer(consideration_score ~  Ethnicity +  Thorough + Lazy + Reserved + Outgoing  + `Finds faults` + Trusting + Ethnicity*Reserved+ Ethnicity*Outgoing + Ethnicity*Trusting + Ethnicity*`Finds faults` +  (1|team), data = consideration)
+
+# summary(eth_mod_1_step3)
+# tab_model(eth_mod_1_step3)
+# round(r.squaredGLMM(eth_mod_1_step3), 3)
+# anova(eth_mod_1_step3, eth_mod_1_step5) # no significant interaction
+
+
+# last step 
+eth_mod_1_step4 <- lmer(consideration_score ~ Thorough*Ethnicity + Lazy*Ethnicity + Reserved*Ethnicity + Outgoing*Ethnicity + Trusting*Ethnicity + `Finds faults`*Ethnicity +  (1|team) , data = consideration)
+summary(eth_mod_1_step4)
+
+plot(eth_mod_1_step4)
+
+Anova(eth_mod_1_step4, type = 3)
+tab_model(eth_mod_1_step4)
+round(r.squaredGLMM(eth_mod_1_step4), 3)
+anova(eth_mod_1_step2, eth_mod_1_step4)
+car::vif(eth_mod_1_step4)
+
+library(jtools)
+library(interactions)
+
+# Thorough
+eth_Thorough_con_fit <- lmer(consideration_score~Q25_8_mean*Ethnicity +  (1|team), data = consideration)
+
+
+summ(eth_Thorough_con_fit)
+
+sim_slopes(eth_Thorough_con_fit, pred = Q25_8_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_Thorough_con_fit,pred = Q25_8_mean, modx =  Ethnicity, x.label = "Does a Thorough Job", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+# Lazy
+eth_lazy_con_fit <- lmer(consideration_score~Q25_3_mean*Ethnicity +  (1|team), data = consideration)
+
+
+summ(eth_lazy_con_fit)
+
+sim_slopes(eth_lazy_con_fit, pred = Q25_3_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_lazy_con_fit,pred = Q25_3_mean, modx =  Ethnicity, x.label = "Tends to be Lazy", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+# Gets Nervous Easily
+eth_nervous_con_fit <- lmer(consideration_score~Q25_9_mean*Ethnicity +  (1|team), data = consideration)
+
+
+summ(eth_nervous_con_fit)
+
+sim_slopes(eth_nervous_con_fit, pred = Q25_9_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_nervous_con_fit,pred = Q25_9_mean, modx =  Ethnicity, x.label = "Gets Nervous easily", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+# Trusting
+eth_trusting_con_fit <- lmer(consideration_score~Q25_2_mean*Ethnicity +  (1|team), data = consideration)
+
+
+summ(eth_trusting_con_fit)
+
+sim_slopes(eth_trusting_con_fit, pred = Q25_2_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_trusting_con_fit,pred = Q25_2_mean, modx =  Ethnicity, x.label = "Generally Trusting", y.label = "Interpersonal Leadership", colors = "Blues" ) + theme_apa()
+
+car::vif(eth_mod_1_step4)
+```
+
+## Model 2: Ethnicity x Task Leadership
+```{r}
+
+eth_mod_2_step_1 <- lmer(initiation_score ~  Ethnicity +  (1|team), data = initiating_structure)
+
+summary(eth_mod_2_step_1)
+anova(eth_mod_2_step_1)
+tab_model(eth_mod_2_step_1)
+round(r.squaredGLMM(eth_mod_2_step_1), 3)
+
+# step 2 - add personality covariates
+eth_mod_2_step_2 <- lmer(initiation_score ~  Ethnicity + Thorough + Lazy + Reserved + Outgoing  + `Finds faults` + Trusting +  (1|team), data = initiating_structure)
+
+summary(eth_mod_2_step_2)
+round(r.squaredGLMM(eth_mod_2_step_2), 3)
+anova(eth_mod_2_step_1,eth_mod_2_step_2)
+
+# # step 3 - add extraversion
+# eth_mod_1_step3 <- lmer(initiation_score ~  Ethnicity + Thorough + Lazy + Relaxed + Nervous +  (1|team), data = initiation)
+# 
+# summary(eth_mod_1_step3)
+# tab_model(eth_mod_1_step3)
+# round(r.squaredGLMM(eth_mod_1_step3), 3)
+# anova(eth_mod_1_step2, eth_mod_1_step3)
+
+# last step 
+eth_mod_2_step4 <- lmer(initiation_score ~ Thorough*Ethnicity + Lazy*Ethnicity +    Reserved*Ethnicity + Outgoing*Ethnicity +
+                                    Trusting*Ethnicity + `Finds faults`*Ethnicity + 
+                                   (1|team), data = initiating_structure)
+
+summary(eth_mod_2_step4)
+Anova(eth_mod_2_step4, type = 3)
+tab_model(eth_mod_1_step4)
+round(r.squaredGLMM(eth_mod_2_step4), 3)
+anova(eth_mod_2_step2, eth_mod_2_step4)
+
+library(jtools)
+library(interactions)
+
+# Thorough
+eth_Thorough_task_fit <- lmer(initiation_score~Q25_8_mean*Ethnicity +  (1|team), data = initiating_structure)
+
+
+summ(eth_Thorough_task_fit)
+
+sim_slopes(eth_Thorough_task_fit, pred = Q25_8_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_Thorough_task_fit,pred = Q25_8_mean, modx =  Ethnicity, x.label = "Does a Thorough Job", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+
+# Lazy
+eth_lazy_task_fit <- lmer(initiation_score~Q25_3_mean*Ethnicity +  (1|team), data = initiating_structure)
+
+
+summ(eth_lazy_task_fit)
+
+sim_slopes(eth_lazy_task_fit, pred = Q25_3_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_lazy_task_fit,pred = Q25_3_mean, modx =  Ethnicity, x.label = "Tends to be Lazy", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+
+# Reserved
+eth_reserved_task_fit <- lmer(initiation_score~Q25_1_mean*Ethnicity +  (1|team), data = initiating_structure)
+
+
+summ(eth_reserved_task_fit )
+
+sim_slopes(eth_reserved_task_fit , pred = Q25_1_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_reserved_task_fit ,pred = Q25_1_mean, modx =  Ethnicity, x.label = "Reserved", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()x
+
+# Outgoing
+eth_outgoing_task_fit <- lmer(initiation_score~Q25_6_mean*Ethnicity +  (1|team), data = initiating_structure)
+
+
+summ(eth_outgoing_task_fit )
+
+sim_slopes(eth_outgoing_task_fit , pred = Q25_6_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_outgoing_task_fit ,pred = Q25_6_mean, modx =  Ethnicity, x.label = "Outgoing, sociable", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+
+
+
+# Trusting
+eth_Trusting_task_fit <- lmer(initiation_score~Q25_2_mean*Ethnicity +  (1|team), data = initiating_structure)
+
+
+summ(eth_Trusting_task_fit )
+
+sim_slopes(eth_Trusting_task_fit , pred = Q25_2_mean, modx = Ethnicity, johnson_neyman = FALSE, cond.int = TRUE)
+
+interact_plot(eth_Trusting_task_fit ,pred = Q25_2_mean, modx =  Ethnicity, x.label = "Trusting", y.label = "Task Leadership", colors = "Blues" ) + theme_apa()
+
+tst <- consideration %>% mutate(Ethnicity = as.factor(Ethnicity))
+
+                                                    
+
+```
+
+
+

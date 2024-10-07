@@ -1,0 +1,194 @@
+---
+title: "AAPI - MDS/Cluster Analysis"
+author: "Jaffa Romain"
+date: "2022-08-18"
+output: pdf_document
+---
+# BFI 10 Item Scale (Question 25)
+How well do the following statements describe your personality?
+I see myself as someone who ...
+1) ... is reserved
+2) ... is generally trusting
+3) ... tends to be lazy
+4) ... is relaxed, handles stress well
+5) ... has few artistic interests
+6) ... is outgoing, sociable
+7) ... tends to find faults with others
+8) ... dos a thorough job
+9) ... gets nervous easily 
+10) ... has an active imagination
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse); library(dplyr);library(readr);library(psych);library(tidyr);
+library(janitor);library(kableExtra);library(rstatix);library(ggthemr);
+library(broom);library(dtplyr);library(lme4);library(lmerTest);library(cowplot);
+library(psych);library(car);library(ppcor);library(ggpubr);library(ggplot2);
+library(sjstats);library(hausekeep);library(purrr);library(tidyr);
+library(lavaan);library(haven);library(performance); library(apaTables)
+
+# theme for plots
+#flat, flat dark, dust, light, earth, fresh, chalk, lilac, carrot, pale, copper, grape, greyscale, sky, solarized, grass, sea, camouflage.
+```
+
+# Personality Scores
+```{r data setup, message=FALSE, warning=FALSE, include=FALSE}
+questionnaires <- readRDS(here::here("questionnaires.rds"))
+lead_longest <- readRDS(here::here("lead_longest.rds"))
+lead <- readRDS(here::here("lead.rds"))
+lead_long <- readRDS(here::here("lead_long.rds"))
+lead_long <- lead_long %>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black"))
+
+lead <- lead %>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black"))
+
+## setting colours
+
+BLACK = "#383669"
+EA = "#783B36"
+WHITE =  "#CBB0A9"
+SA = "#888B7A"
+colours = c(BLACK, EA, WHITE, SA)
+
+dem <- lead %>% group_by(Gender, Ethnicity) %>% mutate(n = n())
+
+# dem %>% ggplot(aes(x = Ethnicity, y = count, fill = Gender)) + geom_bar(stat = "identity", position = position_dodge(),  alpha = 0.75) + theme_classic2() + geom_text(aes(label = count), size = 3, vjust = -0.1, position = position_dodge(0.9)) + labs(y = "# of Students") + scale_fill_manual(values = c("#a2decc", "#295245")) + theme(legend.title = element_blank())
+```
+
+# Leadership Scores
+```{r}
+initiating_structure <- lead_longest %>% filter((Survey == "Q24" &(Question == "1"| Question == "2"|Question == "3"|Question == "4"|Question == "5"|Question == "6"|Question == "7"|Question == "8"|Question == "9"|Question == "10"))) %>% group_by(Name, Rater, Survey) %>% mutate(initiation_score = mean(Score)) %>% ungroup()
+
+consideration <- lead_longest %>% filter(Survey == "Q24" & (Question == "11"| Question == "12"|Question == "13"|Question == "14"|Question == "15"|Question == "16r"|Question == "17"|Question == "18"|Question == "19r"|Question == "20r")) %>% group_by(Name, Rater, Survey) %>% mutate(consideration_score = mean(Score))
+
+lead_longest %>% filter(Survey == "Q25" & Question == 2) %>% group_by(Survey, Question, Gender) %>% get_summary_stats(Score, type = "mean_sd")
+```
+
+
+# K-Means Clustering
+```{r matrix set up}
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+
+lead_longest <- lead_longest %>% mutate(type = case_when(
+Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)" & Gender == "Male"  ~ "SA Male",
+Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"  & Gender == "Female"  ~ "SA Female",
+
+Ethnicity == "East-Asian (Chinese, Korean, Japanese)"  & Gender == "Male"  ~ "EA Male",
+Ethnicity == "East-Asian (Chinese, Korean, Japanese)"& Gender == "Female"  ~ "EA  Female",
+
+Ethnicity == "White/Caucasian/European-American" & Gender == "Male"  ~ "White Male",
+Ethnicity == "White/Caucasian/European-American"& Gender == "Female" ~ "White Female",
+
+Ethnicity == "Black/African-American/West Indian"  & Gender == "Male" ~ "Black Male",
+Ethnicity == "Black/African-American/West Indian" & Gender == "Female" ~  "Black Female"
+
+))
+
+dat <- lead_longest %>% dplyr::select(c(type, Ethnicity, Gender,   Q25_1_mean,Q25_2_mean,Q25_3_mean,  Q25_4_mean,Q25_5_mean, Q25_6_mean, Q25_7_mean , Q25_8_mean,Q25_9_mean, Q25_10_mean, Name, semester)) %>% distinct(Name, semester, .keep_all = TRUE) %>% drop_na() %>% dplyr::select(-c(semester, Name))
+
+
+dat <- dat %>% mutate(Ethnicity = case_when(
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"  ~ "South Asian",
+Ethnicity == "East-Asian (Chinese, Korean, Japanese)"  ~ "East Asian",
+Ethnicity == "White/Caucasian/European-American"~ "White",
+Ethnicity == "Black/African-American/West Indian" ~ "Black"))
+# take out score by ethnicity
+e <- dat %>% dplyr::select(-c(Gender, type)) %>% dplyr::rename(type= "Ethnicity")
+# gender
+g <- dat %>% dplyr::select(-c(Ethnicity, type)) %>% dplyr::rename(type= "Gender")
+# gender x ethnicity 
+eg <- dat %>% dplyr::select(-c(Gender,Ethnicity)) 
+
+dat <- rbind(e,g,eg)
+dat <- aggregate(dat[, 2:11], list(dat$type), mean)
+groups <- dat$Group.1
+dat <- cbind(rownames(dat), data.frame(dat, row.names="Group.1")) %>% dplyr::select(-c(`rownames(dat)`))
+
+dat <- dat %>% mutate(across(where(is.numeric), ~scale(.)))
+
+dat <- dat %>% 
+  dplyr::rename( Reserved = "Q25_1_mean",  Trusting = "Q25_2_mean",  Lazy = "Q25_3_mean", Relaxed = "Q25_4_mean", `Few Artistic` = "Q25_5_mean",  Outgoing= "Q25_6_mean", 
+ `Finds Faults` = "Q25_7_mean", Thorough = "Q25_8_mean", Nervous = "Q25_9_mean", `Active imagination` = "Q25_10_mean")
+
+
+
+
+set.seed(123)
+final <- kmeans(dat, 3, nstart = 25)
+print(final)
+fviz_cluster(final, labelsize = 12, 
+             palette = "jco",
+             main = "", data = dat) + theme_classic() + labs(x = "Dimension 1" , y ="Dimension 2")
+
+means <- dat %>%
+  mutate(Cluster = final$cluster) %>%
+  group_by(Cluster) %>%
+  summarise_all("mean")
+
+library(ggrepel)
+distance <- get_dist(dat)
+d.1 <- cmdscale(distance, 2)
+data.frame(d.1, stim = groups) %>%
+  ggplot(aes(x = X1, y = X2, label = stim)) + geom_point() +
+  geom_text_repel(size = 2)
+d.2 <- cmdscale(distance, 3, eig = TRUE)
+d.2$GOF # Goodness of fit test: 0.88 with 3 variables
+
+cluster <- final$cluster
+dat$cluster <- final$cluster
+data.frame(d.1, names = groups, cluster = factor(cluster)) %>%
+  ggplot(aes(x = X1, y = X2, label = groups, colour = cluster)) +
+  geom_point() +
+  geom_text_repel(size = 2) + theme_classic2() + labs(x = "Dimension 1", y = "Dimension 2") + labs_pubr()
+
+library(MASS)
+lda.dat <-  lda(cluster ~ Reserved +  Trusting + Lazy +  Relaxed +  `Few Artistic` + Outgoing +  
+          `Finds Faults` +  Thorough + 
+     Nervous +  `Active imagination`, data = dat)
+library(ggbiplot)
+
+ggbiplot(lda.dat, groups = factor(cluster), labels = groups, labels.size = 4.5) +
+  scale_colour_manual(values = c("#3690ad", "#d1d071", "#a0a1a7"))  + theme_classic2() + labs(fill = "Cluster", x = "", y = "" ) 
+  
+fviz_dist(distance, gradient = list(low = "white", mid = "#dbebd7", high = "#15402c"))
+
+
+fviz_cluster(final, labelsize = 13, 
+             palette = "jco",
+             main = "", data = dat) +theme(legend.position="top")+ theme_classic() + labs(x = "Dimension 1" , y ="Dimension 2")
+ggsave("clusters-aom.png",width = 11,height = 10,dpi=600)
+```
+
+
+# Plot of z-scores
+```{r}
+scaled_means <-  means %>% dplyr::select(-c(Cluster)) %>% scale()
+scaled_means <- as.data.frame(scaled_means)
+
+scaled_means$cluster <- means$Cluster
+
+scaled_means <- scaled_means %>% pivot_longer(c(Reserved ,Trusting, Lazy ,Relaxed,  `Few Artistic`,  Outgoing,  `Finds Faults`, Thorough,Nervous ,`Active imagination`), names_to = 'Personality Trait', values_to = 'Score' ) %>% mutate(cluster=case_when(cluster==1~"Socially Dominant",cluster==2~"Self Contained",cluster==3~"Communally Competent" ))
+library(gghighlight)
+
+scaled_means_filtered=scaled_means %>% filter(Score<0.7&Score>-0.7)
+ggplot(scaled_means,aes(`Personality Trait`, Score, fill = as.factor(cluster))) + geom_bar(stat="identity")+ geom_bar(stat="identity",data = scaled_means_filtered,color="#e0e0e0",fill="#e0e0e0") + facet_wrap(~cluster) + scale_fill_manual(values = c("#3690ad", "#d1d071", "#a0a1a7"))  + theme_classic2() + labs(fill = "Cluster" ) + theme(axis.text.x = element_text(angle =50, vjust = 1, hjust=1))+theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank(),legend.position="top"
+)
+
+
+ggplot(scaled_means,aes(`Personality Trait`, Score, fill = as.factor(cluster))) + geom_bar(stat="identity") + facet_wrap(~cluster) + scale_fill_manual(values = c("#3690ad", "#d1d071", "#a0a1a7"))  + theme_classic2() + labs(fill = "Cluster" ) + theme(axis.text.x = element_text(angle =50, vjust = 1, hjust=1))+theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank(),legend.position="top"
+)
+
+
+```

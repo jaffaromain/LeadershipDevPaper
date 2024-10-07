@@ -1,0 +1,193 @@
+---
+title: "AAPI  analysis - part 2 of analysis"
+author: "Jaffa Romain"
+date: '2022-07-20'
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse); library(dplyr);library(readr);library(psych);library(tidyr);library(janitor);library(kableExtra);library(rstatix);library(ggthemr)
+# theme for plots
+#flat, flat dark, dust, light, earth, fresh, chalk, lilac, carrot, pale, copper, grape, greyscale, sky, solarized, grass, sea, camouflage.
+library(tidyverse); library(broom);library(dtplyr);library(lme4);library(lmerTest);library(cowplot);library(psych);library(car);library(ppcor);library(ggpubr);library(ggplot2) ;library(sjstats);library(hausekeep);library(purrr);library(tidyr);library(lavaan);library(haven);library(performance); library(apaTables)
+```
+
+```{r data setup, message=FALSE, warning=FALSE, include=FALSE}
+questionnaires <- readRDS(here::here("questionnaires.rds"))
+lead_longest <- readRDS(here::here("lead_longest.rds"))
+lead <- readRDS(here::here("lead.rds"))
+lead_long <- readRDS(here::here("lead_long.rds"))
+lead_long <- lead_long %>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black"))
+
+## setting colours
+
+BLACK = "#383669"
+EA = "#783B36"
+WHITE =  "#CBB0A9"
+SA = "#888B7A"
+colours = c(BLACK, EA, WHITE, SA)
+```
+
+# LBDQ - Reliability
+```{r reliability, echo=FALSE, message=FALSE, warning=FALSE, include = FALSE}
+# Initiating Structure
+with(lead, alpha(cbind(Q24_1_mean, Q24_2_mean, Q24_3_mean, Q24_4_mean, Q24_5_mean, Q24_6_mean, Q24_7_mean, Q24_8_mean, Q24_9_mean, Q24_10_mean), na.rm=T, check.keys = TRUE)) 
+
+# consideration
+with(lead, alpha(cbind(Q24_11_mean, Q24_12_mean, Q24_13_mean, Q24_14_mean, Q24_15_mean, Q24_16r_mean, Q24_17_mean, Q24_18_mean, Q24_19r_mean, Q24_20r_mean), na.rm=T))
+
+
+with(lead, alpha(cbind(Q25_2_mean, Q25_7_mean), na.rm = T, check.keys = TRUE, keys = c(1, -1)))
+
+with(lead, alpha(cbind(Q24_1_mean, Q24_2_mean, Q24_3_mean, Q24_4_mean, Q24_5_mean, Q24_6_mean, Q24_7_mean, Q24_8_mean, Q24_9_mean, Q24_10_mean, Q24_11_mean, Q24_12_mean, Q24_13_mean, Q24_14_mean, Q24_15_mean, Q24_16r_mean, Q24_17_mean, Q24_18_mean, Q24_19r_mean, Q24_20r_mean), na.rm=T))
+```
+
+# Leadership Scores Data 
+```{r}
+
+initiating_structure <- lead_longest %>% filter((Survey == "Q24" &(Question == "1"| Question == "2"|Question == "3"|Question == "4"|Question == "5"|Question == "6"|Question == "7"|Question == "8"|Question == "9"|Question == "10"))) %>% group_by(Name, Rater, Survey) %>% mutate(initiation_score = mean(Score)) %>% ungroup()
+
+consideration <- lead_longest %>% filter(Survey == "Q24" & (Question == "11"| Question == "12"|Question == "13"|Question == "14"|Question == "15"|Question == "16r"|Question == "17"|Question == "18"|Question == "19r"|Question == "20r")) %>% group_by(Name, Rater, Survey) %>% mutate(consideration_score = mean(Score))
+
+# lead_longest %>% mutate(Question = as.numeric(Question)) %>% filter(Survey == "Q25" ) %>% group_by(Survey, Question, Gender) %>% get_summary_stats(Score, type = "mean_sd") %>% kable(caption = "Personality Scores by Gender") %>% kable_styling(latex_options = "striped") %>%
+#   save_kable("BFIscorestable.png")
+# 
+# lead_longest %>% mutate(Question = as.numeric(Question)) %>% filter(Survey == "Q25" ) %>% group_by(Survey, Question, Ethnicity) %>% get_summary_stats(Score, type = "mean_sd") %>% kable(caption = "Personality Scores by Gender") %>% kable_styling(latex_options = "striped") %>%
+#   save_kable("BFIscorestable.png")
+```
+
+
+# Descriptive Statistics and Correlations
+```{r}
+library(apaTables)
+
+initiation_score <- initiating_structure$initiation_score
+
+all_vals = consideration
+all_vals$initiation_score = initiation_score
+
+all_vals <- all_vals %>% dplyr::select(Gender, Ethnicity, consideration, initiation_score, Q25_1_mean, Q25_2_mean,Q25_3_mean, Q25_4_mean,Q25_5_mean, Q25_6_mean,Q25_7_mean, Q25_8_mean,Q25_9_mean, Q25_10_mean)
+
+apa.cor.table(all_vals, filename="Table1_APA.doc", show.conf.interval=F)
+```
+
+# Hierchical Regression for Task Leadership
+```{r}
+library(sjPlot)
+library(sjstats)
+library(MuMIn)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(lme4)
+library(apaTables)
+initiating_structure <- initiating_structure %>% mutate(Ethnicity = as.factor(Ethnicity)) %>% mutate(Ethnicity = fct_relevel(Ethnicity, "East Asian" , after = 0))
+
+consideration <- consideration %>% mutate(Ethnicity = as.factor(Ethnicity)) %>% mutate(Ethnicity = fct_relevel(Ethnicity, "East Asian"   , after = 0))
+
+consideration$Reserved = consideration$Q25_1_mean
+consideration$Trusting = consideration$Q25_2_mean
+consideration$Lazy = consideration$Q25_3_mean
+consideration$Relaxed = consideration$Q25_4_mean
+consideration$`Few artistic interests` = consideration$Q25_5_mean
+consideration$Outgoing = consideration$Q25_6_mean
+consideration$`Finds faults` = consideration$Q25_7_mean
+consideration$Thorough = consideration$Q25_8_mean
+consideration$Nervous = consideration$Q25_9_mean
+consideration$`Active Imagination` = consideration$Q25_10_mean
+
+initiating_structure$Reserved = initiating_structure$Q25_1_mean
+initiating_structure$Trusting = initiating_structure$Q25_2_mean
+initiating_structure$Lazy = initiating_structure$Q25_3_mean
+initiating_structure$Relaxed = initiating_structure$Q25_4_mean
+initiating_structure$`Few artistic interests` = initiating_structure$Q25_5_mean
+initiating_structure$Outgoing = initiating_structure$Q25_6_mean
+initiating_structure$`Finds faults` = initiating_structure$Q25_7_mean
+initiating_structure$Thorough = initiating_structure$Q25_8_mean
+initiating_structure$Nervous = initiating_structure$Q25_9_mean
+initiating_structure$`Active Imagination` = initiating_structure$Q25_10_mean
+
+###############################  task leadership  ###############################
+
+
+###############################  step 1 ###############################
+
+ethmod1 <- lmer(initiation_score~ Gender +  (1|team), data = initiating_structure)
+summary(ethmod1)
+Anova(ethmod1, type = 3) 
+tab_model(ethmod1)
+round(r.squaredGLMM(ethmod1), 3)
+
+############################### step 2 ###############################
+
+
+
+ethmod2 <- lmer(initiation_score ~ Gender + Thorough + Lazy + Relaxed + Nervous + Reserved + Outgoing + Trusting + `Finds faults` + `Few artistic interests` + `Active Imagination` +  (1|team), data = initiating_structure)
+
+summary(ethmod2)
+Anova(ethmod2, type = 3) 
+tab_model(ethmod2)
+round(r.squaredGLMM(ethmod2), 3)
+
+############################### step 3 ###############################
+
+
+
+ethmod3 <- lmer(initiation_score ~ Thorough*Gender + Lazy*Gender + 
+                                    Relaxed*Gender + Nervous*Gender + 
+                                    Reserved*Gender + Outgoing*Gender +
+                                    Trusting*Gender + `Finds faults`*Gender + 
+                                 `Few artistic interests`*Gender + `Active Imagination`*Gender +  (1|team), data = initiating_structure)
+
+summary(ethmod3)
+Anova(ethmod3, type = 3) 
+tab_model(ethmod3)
+round(r.squaredGLMM(ethmod3), 3)
+car::vif(ethmod3)
+```
+
+# Hierchical Regression for Interpersonal Leadership
+```{r}
+
+###############################  step 1 ###############################
+
+genmod1 <- lmer(consideration_score~ Ethnicity +  (1|team), data = consideration)
+summary(genmod1)
+Anova(genmod1, type = 3) 
+tab_model(genmod1)
+round(r.squaredGLMM(genmod1), 3)
+
+############################### step 2 ###############################
+
+
+
+genmod2 <- lmer(consideration_score ~ Ethnicity + Thorough + Lazy + Relaxed + Nervous + Reserved + Outgoing + Trusting + `Finds faults` + `Few artistic interests` + `Active Imagination` +  (1|team), data = consideration)
+
+summary(genmod2)
+Anova(genmod2, type = 3) 
+tab_model(genmod2)
+round(r.squaredGLMM(genmod2), 3)
+
+############################### step 3 ###############################
+
+
+
+genmod3 <- lmer(consideration_score ~  Thorough*Ethnicity + Lazy*Ethnicity + 
+                                    Relaxed*Ethnicity + Nervous*Ethnicity + 
+                                    Reserved*Ethnicity + Outgoing*Ethnicity +
+                                    Trusting*Ethnicity + `Finds faults`*Ethnicity + 
+                                 `Few artistic interests`*Ethnicity + `Active Imagination`*Ethnicity +  (1|team), data = consideration)
+
+summary(genmod3)
+Anova(genmod3, type = 3) 
+tab_model(genmod3)
+round(r.squaredGLMM(genmod3), 3)
+```
+
+
+
+

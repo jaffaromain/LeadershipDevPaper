@@ -1,0 +1,586 @@
+---
+title: "AAPI-revisions-analysis"
+author: "Jaffa Romain"
+date: "2023-08-15"
+output:
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse); library(dplyr);library(readr);library(psych);library(tidyr);library(janitor);library(kableExtra);library(rstatix);library(ggthemr)
+# theme for plots
+#flat, flat dark, dust, light, earth, fresh, chalk, lilac, carrot, pale, copper, grape, greyscale, sky, solarized, grass, sea, camouflage.
+library(tidyverse); library(broom);library(dtplyr);library(lme4);library(lmerTest);library(cowplot);library(psych);library(car);library(ppcor);library(ggpubr);library(ggplot2) ;library(sjstats);library(hausekeep);library(purrr);library(tidyr);library(lavaan);library(haven);library(performance); library(apaTables)
+```
+
+```{r data setup, message=FALSE, warning=FALSE, include=FALSE}
+leadership <- read.csv("leadershipfull.csv")
+lead_longest <- readRDS(here::here("lead_longest.rds"))%>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black")) %>% filter(Ethnicity== "East Asian"| 
+  Ethnicity == "South Asian")
+lead <- readRDS(here::here("lead.rds"))%>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black")) %>% filter(Ethnicity== "East Asian"| 
+  Ethnicity == "South Asian")
+lead_long <- readRDS(here::here("lead_long.rds"))
+lead_long <- lead_long %>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black")) %>% filter(Ethnicity== "East Asian"| 
+  Ethnicity == "South Asian")
+lead_longest=readRDS(here::here("lead_longestNEW.rds")) %>% mutate(Ethnicity = case_when(
+  Ethnicity == "East-Asian (Chinese, Korean, Japanese)" ~ "East Asian", 
+  Ethnicity == "South-East Asian (e.g., Indian, Malay, Pakistani)"~ "South Asian",
+  Ethnicity ==  "White/Caucasian/European-American" ~ "White", 
+  Ethnicity == "Black/African-American/West Indian"~ "Black")) %>% filter(Ethnicity== "East Asian"| 
+  Ethnicity == "South Asian")
+
+## setting colours
+EA = "#CBB0A9"
+SA = "#888B7A"
+colors=c(EA,SA)
+```
+
+## Descriptives
+```{r descriptives, message=FALSE, echo=F, message=FALSE, warning=FALSE, paged.print=FALSE, results='hide'}
+lead %>% tabyl(Gender, Ethnicity,) 
+
+lead_longest %>% tabyl(rater_gender,Gender,Ethnicity)
+lead_longest %>% tabyl(Gender,Ethnicity,rater_ethnicity)
+
+
+lead_longest %>% mutate(question_number = as.numeric(question_number)) %>% filter(survey =="Q25" ) %>% group_by(survey, question_number, Gender) %>% get_summary_stats(rating, type = "mean_sd") %>% kable(caption = "Personality Scores by Gender") %>% kable_styling(latex_options = "striped")
+
+lead_longest %>% mutate(question_number = as.numeric(question_number)) %>% filter(survey == "Q25" ) %>% group_by(survey, question_number, Ethnicity) %>% get_summary_stats(rating, type = "mean_sd") %>% kable(caption = "Personality Scores by Ethnicity") %>% kable_styling(latex_options = "striped") 
+
+lead_longest=lead_longest %>% filter(rater_ethnicity=="South-East Asian (e.g., Indian, Malay, Pakistani)"|rater_ethnicity=="East-Asian (Chinese, Korean, Japanese)")
+```
+
+## Plots 
+## Ethnicity and Gender - Plots and ANOVA for Personality Dimensions
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+theme_set(theme_pubr() +theme(legend.position = "top") )
+anova_plots<-function(data,question,trait){
+  df <-data  %>% filter(Question == question) %>%
+  group_by(Gender, Ethnicity) %>%
+  summarise( n = n(),Score = `Average Score`,
+    sd = sd(`Average Score`, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(`Average Score`, na.rm = TRUE))
+  
+   ggplot(data=subset(df, !is.na(Gender) & !is.na(Ethnicity)), aes(x=Gender, y=mean, color=Ethnicity))+geom_point()+geom_line(aes(group=1), linetype="dashed")+geom_errorbar(aes(x=Gender, ymin=mean-se, ymax=mean+se), width=0.1) +  scale_color_manual(values = colors) + facet_grid(~Ethnicity)  + xlab("Gender")+ylab(trait)+labs(color="Ethnicity") +  theme(legend.title = element_blank(),legend.text = "none",
+        legend.position = "none", axis.text = element_text(size = 12), axis.title = element_text(size = 20), strip.text.x = element_text(size = 12)) +theme_pubr()
+}
+TWO_WAY_ANOVA<-function(lead_longest,surv,q){
+  subset=lead_longest %>% filter(question_number==q&survey==surv)
+  mod=lmer(data=subset,formula =rating ~ Ethnicity*Gender+(1|team))
+  res=anova(mod)
+  tidy=tidy(res)
+  tidy$Question=q
+  tidy
+}
+######################################################################
+anova_plots(lead_long,question="Question 1",trait="Reserved")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=1)
+######################################################################
+anova_plots(lead_long,question="Question 2",trait="Generally trusting")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=2)
+######################################################################
+anova_plots(lead_long,question="Question 3",trait="Tends to be lazy")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=3)
+######################################################################
+anova_plots(lead_long,question="Question 4",trait="Relaxed, handles stress well")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=4)
+######################################################################
+anova_plots(lead_long,question="Question 5",trait="Few artistic interests")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=5)
+#####################################################################
+anova_plots(lead_long,question="Question 6",trait="Outgoing, sociable")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=6)
+######################################################################
+anova_plots(lead_long,question="Question 7",trait="Tends to find faults in others")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=7)
+######################################################################
+anova_plots(lead_long,question="Question 8",trait="Does a thorough job")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=8)
+######################################################################
+anova_plots(lead_long,question="Question 9",trait="Gets nervous easily")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=9)
+######################################################################
+anova_plots(lead_long,question="Question 10",trait="Has an active imagination")
+TWO_WAY_ANOVA(lead_longest,surv = "Q25",q=10)
+```
+# Power
+```{r}
+subset=lead_longest %>% filter(question_number==1&survey=="Q25")
+subset=subset %>% filter(!is.na(Ethnicity)&!is.na(Gender)&!is.na(team)&!is.na(rating))
+  mod=lmer(data=subset,formula =rating ~ Ethnicity*Gender+(1|team))
+  library(simr)
+  fixef(mod)["EthnicitySouth Asian"]<--0.2
+ powerSim(mod, nsim=1000, test = fcompare(rating~Ethnicity))
+powerCurve(mod, nsim=1000, test = fcompare(rating~Ethnicity),along="team")
+         
+sjPlot::tab_model(mod)
+icc(mod)
+```
+
+## Ethnicity and International Status - Plots and ANOVA for Personality Dimensions
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+theme_set(theme_pubr() +theme(legend.position = "top") )
+anova_plots_2<-function(data,question,trait){
+  df <-data  %>% filter(Question == question) %>%
+  group_by(Ethnicity,`Student Status`) %>%
+  summarise( n = n(),Score = `Average Score`,
+    sd = sd(`Average Score`, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(`Average Score`, na.rm = TRUE))
+  
+   ggplot(data=subset(df, !is.na(`Student Status`) & !is.na(Ethnicity)), aes(x=`Student Status`, y=mean, color=Ethnicity))+geom_point()+geom_line(aes(group=1), linetype="dashed")+geom_errorbar(aes(x=`Student Status`, ymin=mean-se, ymax=mean+se), width=0.1) +  scale_color_manual(values = colors) + facet_grid(~Ethnicity)  + xlab("Student Status")+ylab(trait)+labs(color="Ethnicity") +  theme(legend.title = element_blank(),legend.text = "none",
+        legend.position = "none", axis.text = element_text(size = 12), axis.title = element_text(size = 20), strip.text.x = element_text(size = 12)) +theme_pubr()
+}
+TWO_WAY_ANOVA_2<-function(lead_longest,surv,q){
+  subset=lead_longest %>% filter(question_number==q&survey==surv)
+  mod=lmer(data=subset,formula =rating ~ Ethnicity*`Student Status`+(1|team))
+  res=anova(mod)
+  tidy=tidy(res)
+  tidy$Question=q
+  tidy
+}
+q=1
+surv = "Q25"
+  subset=lead_longest %>% filter(question_number==q&survey==surv)
+model=lmer(data=subset,formula=rating ~ Ethnicity*Gender+(1|team))
+
+
+######################################################################
+anova_plots_2(lead_long,question="Question 1",trait="Reserved")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=1)
+######################################################################
+anova_plots_2(lead_long,question="Question 2",trait="Generally trusting")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=2)
+######################################################################
+anova_plots_2(lead_long,question="Question 3",trait="Tends to be lazy")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=3)
+######################################################################
+anova_plots_2(lead_long,question="Question 4",trait="Relaxed, handles stress well")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=4)
+######################################################################
+anova_plots_2(lead_long,question="Question 5",trait="Few artistic interests")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=5)
+#####################################################################
+anova_plots_2(lead_long,question="Question 6",trait="Outgoing, sociable")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=6)
+######################################################################
+anova_plots_2(lead_long,question="Question 7",trait="Tends to find faults in others")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=7)
+######################################################################
+anova_plots_2(lead_long,question="Question 8",trait="Does a thorough job")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=8)
+######################################################################
+anova_plots_2(lead_long,question="Question 9",trait="Gets nervous easily")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=9)
+######################################################################
+anova_plots_2(lead_long,question="Question 10",trait="Has an active imagination")
+TWO_WAY_ANOVA_2(lead_longest,surv = "Q25",q=10)
+lead_longest %>% group_by(Ethnicity,Gender,`Student Status`) %>% count()
+```
+
+
+
+## Ethnicity and Gender of Raters 
+```{r}
+# Plot just rater ethnicity and gender
+rater_plots<-function(q,trait){
+  theme_set(theme_pubr() +theme(legend.position = "top") )
+df <-lead_longest  %>% filter(survey=="Q25"&question_number==q) %>%
+  group_by(rater_gender,rater_ethnicity) %>%
+  summarise( n = n(),Score = rating,
+    sd = sd(rating, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(rating, na.rm = TRUE))
+  BLACK = "#383669"
+EA = "#783B36"
+WHITE =  "#CBB0A9"
+SA = "#888B7A"
+colours = c(BLACK, EA, WHITE, SA)
+
+   ggplot(data=subset(df, !is.na(rater_gender) & !is.na(rater_ethnicity)), aes(rater_gender, y=mean, color=rater_ethnicity))+geom_point()+geom_line( linetype="dashed")+geom_errorbar(aes(x=rater_gender, ymin=mean-se, ymax=mean+se), width=0.1) +  scale_color_manual(values = colours) + facet_grid(~rater_ethnicity)  + xlab("Gender")+ylab(trait)+labs(color="Ethnicity") +  theme(legend.title = element_blank(),legend.text = "none",
+        legend.position = "none", axis.text = element_text(size = 12), axis.title = element_text(size = 20), strip.text.x = element_text(size = 12)) +theme_pubr()
+   
+}
+
+   three_way_anova<-function(q){
+     subset=lead_longest %>% filter(survey=="Q25"&question_number==q)
+  mod=lmer(data=subset,formula =rating ~ rater_gender*rater_ethnicity*Ethnicity*Gender+(1|team))
+  res=anova(mod)
+  res}
+   
+   for (q in 1:10) {
+     print(three_way_anova(q))
+   }
+   
+```
+# Missingness
+
+
+```{r include=FALSE}
+library(visdat)
+SR= readRDS(here::here("self_leadership_ratings.rds")) 
+SR_TR=inner_join(lead,SR,by="Name")
+```
+```{r}
+vis_miss(SR)
+```
+
+# Average Self-ratings 
+```{r}
+library(psych)
+# reverse score last 2 questions
+SR_TR$Q45_6 = car::recode(SR_TR$Q45_6, '1=5; 2=4; 3=3; 4=2; 5=1')
+SR_TR$Q45_7 = car::recode(SR_TR$Q45_7, '1=5; 2=4; 3=3; 4=2; 5=1')
+
+# reliability
+with(SR_TR, psych::alpha(cbind(Q44_1,Q44_2,Q44_3,Q44_4,Q45_1,Q45_2,
+Q45_3,Q45_4,Q45_5,Q45_6,Q45_7), na.rm=T, check.keys = TRUE)) 
+
+SR_TR$avg_SR= rowMeans(subset(SR_TR, select = c(Q44_1,Q44_2,Q44_3,Q44_4,Q45_1,Q45_2,
+Q45_3,Q45_4,Q45_5,Q45_6,Q45_7)), na.rm = TRUE)
+```
+```{r}
+tst=SR_TR %>% dplyr::select(contains("Q")|contains("init")|contains("cons")|contains("avg_SR"))
+tst=tst %>% dplyr::select(!contains("rater")&!contains("Q3")&!contains("Q19")&!contains("Q8")&!contains("Q24")&!contains("Q4"))
+
+colnames(tst)<-c( "Reserved","Outgoing","Generally trusting", "Tends to find faults"," Tends to be lazy",
+"Does a thorough job","Relaxed, handles stress well","Gets nervous easily" ,"Few artistic interests","Active imagination", "Task Leadership","Interpersonal Leadership","Self-perceived Leadership"
+)
+names(tst)
+apa.cor.table(tst,"co.tl.doc")
+library(tidyverse)
+tst=lead_longest %>% distinct(Name,rater,.keep_all = T)
+tst=tst %>% mutate(rater_ethnicity=case_when(rater_ethnicity=="East-Asian (Chinese, Korean, Japanese)"~"East Asian",rater_ethnicity=="South-East Asian (e.g., Indian, Malay, Pakistani)"~"South Asian")) %>% filter(!is.na(
+rater_ethnicity)&!is.na(rater_gender)&!is.na(Gender)&!is.na(
+Ethnicity))
+
+tst=tst %>% mutate(same_gen=ifelse(Gender==rater_gender,1,0),same_eth=ifelse(Ethnicity==rater_ethnicity,1,0)) 
+prop.table(table(tst$same_gen,tst$same_eth))
+
+ tst%>% group_by(rater_ethnicity,rater_gender,Ethnicity,Gender)  %>% count()
+tst %>% mutate(ifelse())
+```
+
+```{r}
+library(ggplot2);library(ggthemr);theme('fresh');library(viridis);library(RColorBrewer);install.packages("wesanderson")
+library(wesanderson)
+SR_TR %>% ggplot(aes(x=Ethnicity,y=avg_SR,fill=Gender)) +
+    geom_boxplot() +
+    scale_fill_manual(EA,SA) +
+    geom_jitter(color="black", size=0.4, alpha=0.9) +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)
+    ) +labs(y="Average Self-reported Leadership Score")
+
+
+SR_TR %>% ggplot(aes(x=Ethnicity,y=avg_SR,fill=Gender)) +
+    geom_boxplot() +facet_wrap(~`Student Status`)+
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    geom_jitter(color="black", size=0.4, alpha=0.9) +
+    theme(
+      
+      plot.title = element_text(size=11)
+    ) +labs(y="Average Self-reported Leadership Score")
+
+SR_TR %>% ggplot(aes(x=`Student Status`,y=avg_SR,fill=Ethnicity)) +
+    geom_boxplot() +facet_wrap(~Gender)+
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    geom_jitter(color="black", size=0.4, alpha=0.9) +
+    theme(
+      plot.title = element_text(size=11)
+    ) +labs(y="Average Self-reported Leadership Score")
+
+ggplot(data=SR_TR)+geom_smooth(aes(x=avg_SR, y=initiating_structure, color=Ethnicity, linetype=Gender), method="lm", se=FALSE) + theme_cowplot()+scale_colour_manual(values=colors)+labs(x="Self-rated Leadership",y="Task Leadership",color=" Ethnicity", linetype="Gender")+ theme(legend.position="bottom", legend.text = element_text(colour="black", face="bold"), axis.text = element_text(size = 12), axis.title = element_text(size = 12), strip.text.x = element_text(size = 12)) +  guides(
+         size = guide_legend(order=2))
+ggsave(paste0("figuresa/is-sel","saea.png"))
+
+ggplot(data=SR_TR)+geom_smooth(aes(x=avg_SR, y=consideration, color=Ethnicity, linetype=Gender), method="lm", se=FALSE) + theme_cowplot()+scale_colour_manual(values=colors)+labs(x="Self-rated Leadership",y="Interpersonal Leadership",color=" Ethnicity", linetype="Gender")+ theme(legend.position="bottom", legend.text = element_text(colour="black", face="bold"), axis.text = element_text(size = 12), axis.title = element_text(size = 12), strip.text.x = element_text(size = 12)) +  guides(
+         size = guide_legend(order=2))
+ggsave(paste0("figuresa/cons-sel","saea.png"))
+
+summary(aov(avg_SR ~ Ethnicity*Gender, data=SR_TR))
+
+
+summary(aov(initiating_structure ~ avg_SR*Ethnicity*Gender, data=SR_TR))
+summary(aov(consideration ~ avg_SR*Ethnicity*Gender, data=SR_TR))
+
+plot(SRmod)
+```
+
+```{r}
+
+```
+
+
+# LBDQ - Reliability
+```{r reliability, echo=FALSE, message=FALSE, warning=FALSE}
+# Initiating Structure
+with(lead, alpha(cbind(Q24_1_mean, Q24_2_mean, Q24_3_mean, Q24_4_mean, Q24_5_mean, Q24_6_mean, Q24_7_mean, Q24_8_mean, Q24_9_mean, Q24_10_mean), na.rm=T, check.keys = TRUE)) 
+
+# consideration
+with(lead, alpha(cbind(Q24_11_mean, Q24_12_mean, Q24_13_mean, Q24_14_mean, Q24_15_mean, Q24_16r_mean, Q24_17_mean, Q24_18_mean, Q24_19r_mean, Q24_20r_mean), na.rm=T))
+
+
+
+with(lead, alpha(cbind(Q24_1_mean, Q24_2_mean, Q24_3_mean, Q24_4_mean, Q24_5_mean, Q24_6_mean, Q24_7_mean, Q24_8_mean, Q24_9_mean, Q24_10_mean, Q24_11_mean, Q24_12_mean, Q24_13_mean, Q24_14_mean, Q24_15_mean, Q24_16r_mean, Q24_17_mean, Q24_18_mean, Q24_19r_mean, Q24_20r_mean), na.rm=T))
+```
+
+# Leadership Scores Data 
+```{r}
+
+initiating_structure <- lead_longest %>% filter((survey =="Q24" &(question_number== 1| question_number ==2|question_number ==3|question_number ==4|question_number ==5|question_number ==6|question_number ==7|question_number ==8|question_number ==9|question_number ==10))) %>% group_by(Name, rater, survey) %>% mutate(initiation_score = mean(rating)) %>% ungroup() 
+consideration <- lead_longest %>% filter(survey =="Q24" & (question_number ==11| question_number ==12|question_number ==13|question_number ==14|question_number ==15|question_number ==16|question_number ==17|question_number ==18|question_number ==19|question_number ==20)) %>% group_by(Name, rater, survey) %>% mutate(consideration_score = mean(rating))
+
+```
+
+### ANOVA
+```{r}
+
+##### ANOVA ####
+
+cons <- lmer(consideration_score~Ethnicity*Gender + (1|team), data=consideration)
+anova(cons)
+ini <- lmer(initiation_score~Ethnicity*Gender +  (1|team), data = initiating_structure)
+anova(ini)
+
+initiating_structure %>% group_by( Gender) %>% get_summary_stats(initiation_score, type = "mean_sd")
+
+consideration %>% group_by(Ethnicity) %>% get_summary_stats(consideration, type = "mean_sd", )
+
+
+consideration%>% ggplot(aes(x=`Student Status`,y=consideration_score,fill=Gender)) +
+    geom_boxplot() +facet_wrap(~Ethnicity)+
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    theme(
+      plot.title = element_text(size=11)
+    ) +labs(y="Average Self-reported Leadership Score")
+cons <- anova(lmer(consideration_score~Ethnicity*Gender*`Student Status` + (1|team), data=consideration))
+
+```
+
+# Models 
+```{r}
+library(sjPlot)
+library(sjstats)
+library(MuMIn)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(lme4)
+library(apaTables)
+initiating_structure <- initiating_structure %>% mutate(Ethnicity = as.factor(Ethnicity))
+SR_TR_lead=SR_TR %>% dplyr::select(c(Name,avg_SR))
+
+initiating_structure<-left_join(initiating_structure,SR_TR_lead,by="Name")
+
+hist(initiating_structure$initiation_score)
+hist(log(initiating_structure$initiation_score))
+
+consideration <- consideration %>% mutate(Ethnicity = as.factor(Ethnicity)) 
+consideration<- left_join(consideration,SR_TR_lead,by="Name")
+
+hist(consideration$consideration_score)
+hist(log(consideration$consideration_score))
+
+### Initiating Structure - Gender Models ###
+# significant
+# 3 - lazy, 8 does a thorough job (conscientiousness)
+
+genmod<-function(formul){
+  genmod= lmer(formula=formul, data = initiating_structure)
+print(summary(genmod))
+print(Anova(genmod, type = 3) )
+print(tab_model(genmod))
+round(r.squaredGLMM(genmod), 3)
+}
+genmod(formul=initiation_score~`Student Status`+avg_SR+Gender+Ethnicity+ (1|team))
+genmod(formul=initiation_score~`Student Status`+avg_SR+Gender+ (1|team))
+genmod(formul=initiation_score~`Student Status`+avg_SR+Gender*Ethnicity*Q25_3_mean + Q25_8_mean + (1|team))
+genmod(formul=initiation_score~`Student Status`+avg_SR+Gender*Ethnicity + Q25_3_mean + Q25_8_mean + Q25_4_mean + Q25_9_mean +  (1|team))
+genmod(formul=initiation_score~`Student Status`+avg_SR+Gender*Ethnicity + Q25_3_mean + Q25_8_mean + Q25_4_mean + Q25_9_mean + Q25_1_mean  + Q25_6_mean +  (1|team))
+
+genmod(formul=initiation_score~`Student Status`+avg_SR+Gender*Ethnicity + Q25_3_mean + Q25_8_mean + Q25_4_mean + Q25_9_mean + Q25_1_mean  + Q25_6_mean + Q25_2_mean + Q25_7_mean + Q25_5_mean + Q25_10_mean  +  (1|team))
+
+library(nlme)
+library(lme4)
+
+### Consideration - Ethnicity ###
+
+ethmod1 <- lmer(consideration_score~`Student Status`+avg_SR+Ethnicity+Gender+ (1|team), data = consideration)
+summary(ethmod1)
+Anova(ethmod1, type = 3)
+tab_model(ethmod1, show.se = TRUE) 
+
+
+ethmod2 <- lmer(consideration_score~`Student Status`+avg_SR+Ethnicity*Gender+ (1|team) , data = consideration)
+
+summary(ethmod2)
+Anova(ethmod2, type = 3)
+tab_model(ethmod2, show.se = TRUE) 
+
+
+ethmod3 <- lmer(consideration_score~`Student Status`+avg_SR+Ethnicity*Gender+ Q25_3_mean + Q25_8_mean + (1|team), data = consideration)
+
+summary(ethmod3)
+Anova(ethmod3, type = 3)
+tab_model(ethmod3, show.se = TRUE) 
+
+
+ethmod4 <- lmer(consideration_score~`Student Status`+avg_SR+Ethnicity*Gender+ Q25_3_mean + Q25_8_mean + Q25_4_mean + Q25_9_mean  + (1|team), data = consideration)
+
+summary(ethmod4)
+Anova(ethmod4, type = 3)
+tab_model(ethmod4, show.se = TRUE) 
+
+# marginal R - fixed
+# conditional - explained by both the fixed and random effects
+
+ethmod5 <- lmer(consideration_score~`Student Status`+avg_SR+Ethnicity*Gender+ Q25_3_mean + Q25_8_mean + Q25_4_mean + Q25_9_mean + Q25_1_mean  + Q25_6_mean + Q25_9_mean  + (1|team), data = consideration)
+
+summary(ethmod5)
+Anova(ethmod5, type = 3)
+tab_model(ethmod5, show.se = TRUE) 
+
+ethmod6 <- lmer(consideration_score~Ethnicity + Gender+ Ethnicity*Gender +  Q25_3_mean + Q25_8_mean + Q25_4_mean + Q25_9_mean + Q25_1_mean  + Q25_6_mean + Q25_2_mean + Q25_7_mean + Q25_5_mean + Q25_10_mean  + (1|team), data = consideration)
+
+summary(ethmod6)
+Anova(ethmod6, type = 3)
+tab_model(ethmod6, show.se = TRUE) 
+```
+
+
+## Plotting means for consideration and initiating structure
+
+```{r}
+theme_set(
+  theme_classic() +
+    theme(legend.position = "top")
+  )
+dfcon.summary <-consideration %>%
+  group_by(Gender, Ethnicity) %>%
+  summarise( n = n(),Score = consideration_score,
+    sd = sd(consideration_score, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(consideration_score, na.rm = TRUE)
+  )
+
+dfcon.summary2 <-consideration %>%
+  group_by(Ethnicity) %>%
+  summarise( n = n(),Score = consideration_score,
+    sd = sd(consideration_score, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(consideration_score, na.rm = TRUE)
+  )
+
+consplot <-
+  ggplot(data=subset(dfcon.summary2, !is.na(Ethnicity)), aes(x=Ethnicity, y=mean))+geom_point()+geom_line(aes(group=1), linetype="dashed")+geom_errorbar(aes(x=Ethnicity, ymin=mean-se, ymax=mean+se), width=0.1) +  xlab("Ethnicity")+ylab("Interpersonal leadership")+labs(color="Ethnicity") +  theme(legend.title = element_blank(),
+        legend.position = "none")  + theme_classic()
+
+consplot
+ggsave("figures/consplot-saea.png")
+
+anova(lmer(consideration_score~Ethnicity +  (1|team), data = consideration))
+
+### initiating structure
+dfis.summary <-initiating_structure %>%
+  group_by(Gender, Ethnicity) %>%
+  summarise( n = n(),Score = initiation_score,
+    sd = sd(initiation_score, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(initiation_score, na.rm = TRUE)
+  )
+
+dfis.summary2 <-initiating_structure %>%
+  group_by(Gender) %>%
+  summarise( n = n(),Score = initiation_score,
+    sd = sd(initiation_score, na.rm = TRUE),
+    se = sd/sqrt(n),
+    mean = mean(initiation_score, na.rm = TRUE)
+  )
+
+isplot <-
+  ggplot(data=subset(dfis.summary, !is.na(Gender) & !is.na(Ethnicity)), aes(x=Gender, y=mean))+geom_point()+geom_line(aes(group=1), linetype="dashed")+geom_errorbar(aes(x=Gender, ymin=mean-se, ymax=mean+se), width=0.1) + facet_grid(~Ethnicity)  + xlab("Gender")+ylab("Task Leadership")+labs(color="Ethnicity") +  theme(legend.title = element_blank(),
+        legend.position = "none") + theme_classic() 
+isplot
+ggsave("figures/isplot-saea.png")
+
+ggplot(data=subset(dfis.summary2, !is.na(Gender)), aes(x=Gender, y=mean))+geom_point()+geom_line(aes(group=1), linetype="dashed")+geom_errorbar(aes(x=Gender, ymin=mean-se, ymax=mean+se), width=0.1) +  xlab("Gender")+ylab("Task Leadership")+  theme(legend.title = element_blank(),
+        legend.position = "none") + theme_classic()
+
+consplot<-function(q,t){
+  new_col_name <-consideration[[paste0("Q25_", q, "_mean")]]
+consideration$new_col_name <- new_col_name
+  ggplot(data=consideration)+geom_smooth(aes(x=new_col_name, y=consideration_score, color=Ethnicity, linetype=Gender), method="lm", se=FALSE)+ theme_classic()+scale_colour_manual(values=colors)+labs(x=t,y="Interpersonal leadership",color=" Ethnicity", linetype="Gender")  + theme(legend.position="bottom", legend.text = element_text(colour="black", face="bold"), axis.text = element_text(size = 14), axis.title = element_text(size = 14), strip.text.x = element_text(size = 14)) +  guides(
+         size = guide_legend(order=2))
+  
+ggsave(paste0("figuresa/con-",t,q,"-saea.png"))
+}
+isplot<-function(q,t){
+new_col_name <-initiating_structure[[paste0("Q25_", q, "_mean")]]
+initiating_structure$new_col_name <- new_col_name # replace 'mean' with the correct column if necessary
+  ggplot(data=initiating_structure)+geom_smooth(aes(x=new_col_name, y=initiation_score, color=Ethnicity, linetype=Gender), method="lm", se=FALSE) + theme_cowplot()+scale_colour_manual(values=colors)+labs(x=t,y="Task Leadership",color=" Ethnicity", linetype="Gender")+ theme(legend.position="bottom", legend.text = element_text(colour="black", face="bold"), axis.text = element_text(size = 14), axis.title = element_text(size = 14), strip.text.x = element_text(size = 14)) +  guides(
+         size = guide_legend(order=2))
+ggsave(paste0("figuresa/is-",t,q,"-saea.png"))}
+
+
+traits=list(c("Has few artistic interests",5),
+c("Has an active imagination",10),
+c("Tends to be lazy",3),
+c("Does a thorough job",8),
+c("Reserved",1),c("Outgoing",6),
+c("Tends to find faults",7),c( "Generally trusting",2),
+c("Gets nervous easily",9),
+c("Relaxed",4))
+
+for (tr in traits){
+  consplot(q=tr[2],t=tr[1])
+  }
+```
+
+# Slope Analysis
+
+## Gender Model - task leadership
+```{r}
+library(rockchalk)
+anova(lmer(initiation_score~Q25_2_mean*Gender +  (1|team), data = initiating_structure))
+
+anova(lmer(initiation_score~Q25_3_mean*Gender +  (1|team), data = initiating_structure))
+
+anova(lmer(initiation_score~Q25_4_mean*Gender +  (1|team), data = initiating_structure))
+
+
+
+anova(lmer(initiation_score~Q25_6_mean*Gender +  (1|team), data = initiating_structure))
+
+
+
+anova(lmer(initiation_score~Q25_8_mean*Gender +  (1|team), data = initiating_structure))
+
+anova(lmer(initiation_score~Gender*Q25_9_mean +  (1|team), data = initiating_structure))
+
+anova(lmer(initiation_score~Gender*Q25_10_mean +  (1|team), data = initiating_structure))
+
+tst <- lmer(initiation_score~Q25_2_mean*Gender +  (1|team), data = initiating_structure)
+# 
+# plotSlopes(tst, plotx = "Q25_2_mean", modx = "gender", modxVals = "std.dev")
+```
+
+
+
+
+
